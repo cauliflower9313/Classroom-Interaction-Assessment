@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互动评估 - 课堂互动系统</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        .sidebar { position: fixed; left: 0; top: 0; height: 100vh; }
+        .main-content { margin-left: var(--sidebar-width); }
+        
+        /* 统计卡片样式 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        
+        @media (max-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .stat-card {
+            background: var(--white);
+            border-radius: var(--border-radius-lg);
+            padding: 24px;
+            box-shadow: var(--box-shadow);
+            text-align: center;
+            transition: var(--transition);
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--box-shadow-lg);
+        }
+        
+        .stat-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin: 0 auto 16px;
+        }
+        
+        .stat-icon.primary { background: rgba(74, 144, 217, 0.1); color: var(--primary-color); }
+        .stat-icon.success { background: rgba(40, 167, 69, 0.1); color: var(--success-color); }
+        .stat-icon.warning { background: rgba(255, 193, 7, 0.1); color: var(--warning-color); }
+        .stat-icon.info { background: rgba(23, 162, 184, 0.1); color: var(--info-color); }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--gray-800);
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: var(--gray-500);
+        }
+        
+        /* 图表和建议并排布局 */
+        .chart-suggestion-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        
+        @media (max-width: 992px) {
+            .chart-suggestion-row {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .chart-box {
+            background: var(--white);
+            border-radius: var(--border-radius-lg);
+            padding: 20px;
+            box-shadow: var(--box-shadow);
+            min-height: 350px;
+        }
+        
+        .chart-box h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .chart-box h4 i {
+            color: var(--primary-color);
+        }
+        
+        .suggestion-box {
+            background: #f8f9fa;
+            border-radius: var(--border-radius-lg);
+            padding: 20px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .suggestion-box h5 {
+            margin: 0 0 15px 0;
+            color: var(--dark-color);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .suggestion-box h5 i {
+            color: var(--primary-color);
+        }
+        
+        .suggestion-content {
+            line-height: 1.8;
+            color: #495057;
+        }
+        
+        .suggestion-content p {
+            margin-bottom: 12px;
+        }
+        
+        .suggestion-content ul {
+            padding-left: 20px;
+            margin: 10px 0;
+        }
+        
+        .suggestion-content li {
+            margin-bottom: 8px;
+        }
+        
+        /* 不同状态的颜色 */
+        .suggestion-box.success {
+            border-left-color: var(--success-color);
+            background: #d4edda;
+        }
+        
+        .suggestion-box.success h5 i {
+            color: var(--success-color);
+        }
+        
+        .suggestion-box.warning {
+            border-left-color: var(--warning-color);
+            background: #fff3cd;
+        }
+        
+        .suggestion-box.warning h5 i {
+            color: var(--warning-color);
+        }
+        
+        .suggestion-box.danger {
+            border-left-color: var(--danger-color);
+            background: #f8d7da;
+        }
+        
+        .suggestion-box.danger h5 i {
+            color: var(--danger-color);
+        }
+        
+        /* 综合评价卡片 */
+        .overall-evaluation {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: var(--border-radius-lg);
+            padding: 24px;
+            margin-top: 24px;
+        }
+        
+        .overall-evaluation h4 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+        }
+        
+        .overall-evaluation p {
+            line-height: 1.8;
+            margin: 0;
+        }
+        
+        /* 课程表现列表 */
+        .course-performance-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .course-performance-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .course-performance-item .course-name {
+            font-weight: 500;
+            color: var(--gray-800);
+        }
+        
+        .course-performance-item .course-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+        }
+        
+        .course-performance-item .stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .course-performance-item .stat-value {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray-500);
+        }
+        
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 16px;
+            color: var(--gray-400);
+        }
+        
+        .loading-state {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading-state i {
+            font-size: 32px;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>课堂互动系统</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-item" onclick="window.location.href='/student/index'">
+                    <i class="fas fa-book"></i>
+                    <span>我的课程</span>
+                </div>
+                <div class="nav-item" onclick="window.location.href='/student/dashboard'">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>个人仪表盘</span>
+                </div>
+                <div class="nav-item active" onclick="window.location.href='/student/evaluation'">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>互动评估</span>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部导航 -->
+            <header class="top-header">
+                <h1 class="header-title">互动评估</h1>
+                <div class="header-actions">
+                    <div class="user-info">
+                        <div class="user-avatar">{{ student_name[:1] }}</div>
+                        <span class="user-name">{{ student_name }}</span>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> 退出
+                    </button>
+                </div>
+            </header>
+
+            <!-- 内容区域 -->
+            <div class="content-area">
+                <!-- 页面标题 -->
+                <div class="page-header">
+                    <h2 class="page-title">我的课堂互动效果</h2>
+                    <p class="page-subtitle">查看个人课堂表现和学习建议</p>
+                </div>
+
+                <!-- 统计概览 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon primary"><i class="fas fa-book"></i></div>
+                        <div class="stat-value" id="stat-total-courses">0</div>
+                        <div class="stat-label">参与课程数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon info"><i class="fas fa-chart-line"></i></div>
+                        <div class="stat-value" id="stat-avg-head-up">0%</div>
+                        <div class="stat-label">平均抬头率</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon success"><i class="fas fa-check-circle"></i></div>
+                        <div class="stat-value" id="stat-avg-correct">0%</div>
+                        <div class="stat-label">平均正确率</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon warning"><i class="fas fa-trophy"></i></div>
+                        <div class="stat-value" id="stat-rank">-</div>
+                        <div class="stat-label">班级排名</div>
+                    </div>
+                </div>
+
+                <!-- 图表1：抬头率趋势 + 评估建议 -->
+                <div class="panel" style="margin-bottom: 24px;">
+                    <div class="panel-header">
+                        <div class="panel-title"><i class="fas fa-chart-line text-primary"></i> 抬头率趋势分析</div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="chart-suggestion-row">
+                            <div class="chart-box" style="min-height: 300px;">
+                                <canvas id="headUpTrendChart"></canvas>
+                            </div>
+                            <div class="suggestion-box" id="headUpSuggestion">
+                                <h5><i class="fas fa-comment-dots"></i> 专注度评估</h5>
+                                <div class="suggestion-content">
+                                    <p>正在加载数据...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 图表2：答题正确率 + 评估建议 -->
+                <div class="panel" style="margin-bottom: 24px;">
+                    <div class="panel-header">
+                        <div class="panel-title"><i class="fas fa-chart-bar text-primary"></i> 答题正确率分析</div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="chart-suggestion-row">
+                            <div class="chart-box" style="min-height: 300px;">
+                                <canvas id="correctRateChart"></canvas>
+                            </div>
+                            <div class="suggestion-box" id="correctRateSuggestion">
+                                <h5><i class="fas fa-comment-dots"></i> 学习效果评估</h5>
+                                <div class="suggestion-content">
+                                    <p>正在加载数据...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 图表3：各课程表现 + 评估建议 -->
+                <div class="panel" style="margin-bottom: 24px;">
+                    <div class="panel-header">
+                        <div class="panel-title"><i class="fas fa-graduation-cap text-primary"></i> 各课程表现分析</div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="chart-suggestion-row">
+                            <div class="chart-box" style="min-height: 300px;">
+                                <canvas id="coursePerformanceChart"></canvas>
+                            </div>
+                            <div class="suggestion-box" id="courseSuggestion">
+                                <h5><i class="fas fa-comment-dots"></i> 课程学习建议</h5>
+                                <div class="suggestion-content">
+                                    <p>正在加载数据...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 图表4：课堂参与度分布 + 评估建议 -->
+                <div class="panel" style="margin-bottom: 24px;">
+                    <div class="panel-header">
+                        <div class="panel-title"><i class="fas fa-users text-primary"></i> 课堂参与度分析</div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="chart-suggestion-row">
+                            <div class="chart-box" style="min-height: 300px;">
+                                <canvas id="participationChart"></canvas>
+                            </div>
+                            <div class="suggestion-box" id="participationSuggestion">
+                                <h5><i class="fas fa-comment-dots"></i> 参与度评估</h5>
+                                <div class="suggestion-content">
+                                    <p>正在加载数据...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 综合评价 -->
+                <div class="overall-evaluation">
+                    <h4><i class="fas fa-lightbulb"></i> 综合评价与学习建议</h4>
+                    <div id="overallSuggestion">
+                        <p>正在生成综合评价...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 图表实例
+        let headUpTrendChart = null;
+        let correctRateChart = null;
+        let coursePerformanceChart = null;
+        let participationChart = null;
+
+        // 页面加载时获取数据
+        document.addEventListener('DOMContentLoaded', function() {
+            loadEvaluationData();
+        });
+
+        // 加载评估数据
+        function loadEvaluationData() {
+            fetch('/student/evaluation/report', {
+                credentials: 'include',
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.code === 200) {
+                    const data = result.data;
+                    
+                    // 更新统计数据
+                    document.getElementById('stat-total-courses').textContent = data.total_courses || 0;
+                    document.getElementById('stat-avg-head-up').textContent = (data.avg_head_up_rate || 0) + '%';
+                    document.getElementById('stat-avg-correct').textContent = (data.avg_correct_rate || 0) + '%';
+                    document.getElementById('stat-rank').textContent = data.class_rank || '-';
+                    
+                    // 渲染图表
+                    renderHeadUpTrendChart(data);
+                    renderCorrectRateChart(data);
+                    renderCoursePerformanceChart(data);
+                    renderParticipationChart(data);
+                    
+                    // 渲染建议
+                    renderHeadUpSuggestion(data);
+                    renderCorrectRateSuggestion(data);
+                    renderCourseSuggestion(data);
+                    renderParticipationSuggestion(data);
+                    renderOverallSuggestion(data);
+                } else {
+                    console.error('获取评估数据失败:', result.msg);
+                }
+            })
+            .catch(error => {
+                console.error('获取评估数据失败:', error);
+            });
+        }
+
+        // 渲染抬头率趋势图
+        function renderHeadUpTrendChart(data) {
+            const ctx = document.getElementById('headUpTrendChart');
+            if (!ctx) return;
+            
+            if (headUpTrendChart) {
+                headUpTrendChart.destroy();
+            }
+            
+            const trendData = data.head_up_trend || [];
+            
+            if (trendData.length === 0) {
+                ctx.parentElement.innerHTML = '<div class="empty-state"><i class="fas fa-chart-line"></i><p>暂无抬头率数据</p></div>';
+                return;
+            }
+            
+            const labels = trendData.map(item => item.date);
+            const values = trendData.map(item => item.rate);
+            
+            headUpTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '抬头率',
+                        data: values,
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '抬头率: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { stepSize: 20 },
+                            title: { display: true, text: '抬头率 (%)' }
+                        },
+                        x: {
+                            title: { display: true, text: '日期' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 渲染答题正确率图
+        function renderCorrectRateChart(data) {
+            const ctx = document.getElementById('correctRateChart');
+            if (!ctx) return;
+            
+            if (correctRateChart) {
+                correctRateChart.destroy();
+            }
+            
+            const correctData = data.correct_rate_trend || [];
+            
+            if (correctData.length === 0) {
+                ctx.parentElement.innerHTML = '<div class="empty-state"><i class="fas fa-chart-bar"></i><p>暂无答题数据</p></div>';
+                return;
+            }
+            
+            const labels = correctData.map(item => item.date);
+            const values = correctData.map(item => item.rate);
+            
+            correctRateChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '正确率',
+                        data: values,
+                        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '正确率: ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { stepSize: 20 },
+                            title: { display: true, text: '正确率 (%)' }
+                        },
+                        x: {
+                            title: { display: true, text: '日期' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 渲染各课程表现图
+        function renderCoursePerformanceChart(data) {
+            const ctx = document.getElementById('coursePerformanceChart');
+            if (!ctx) return;
+            
+            if (coursePerformanceChart) {
+                coursePerformanceChart.destroy();
+            }
+            
+            const courseData = data.course_performance || [];
+            
+            if (courseData.length === 0) {
+                ctx.parentElement.innerHTML = '<div class="empty-state"><i class="fas fa-graduation-cap"></i><p>暂无课程数据</p></div>';
+                return;
+            }
+            
+            const labels = courseData.map(item => item.course_name);
+            const headUpValues = courseData.map(item => item.avg_head_up_rate);
+            const correctValues = courseData.map(item => item.avg_correct_rate);
+            
+            coursePerformanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '抬头率',
+                            data: headUpValues,
+                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                            borderColor: 'rgba(102, 126, 234, 1)',
+                            borderWidth: 2
+                        },
+                        {
+                            label: '正确率',
+                            data: correctValues,
+                            backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                            borderColor: 'rgba(40, 167, 69, 1)',
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { stepSize: 20 },
+                            title: { display: true, text: '百分比 (%)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 渲染课堂参与度图
+        function renderParticipationChart(data) {
+            const ctx = document.getElementById('participationChart');
+            if (!ctx) return;
+            
+            if (participationChart) {
+                participationChart.destroy();
+            }
+            
+            const participation = data.participation_stats || { high: 0, medium: 0, low: 0 };
+            const total = participation.high + participation.medium + participation.low;
+            
+            if (total === 0) {
+                ctx.parentElement.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>暂无参与度数据</p></div>';
+                return;
+            }
+            
+            participationChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['高参与度', '中参与度', '低参与度'],
+                    datasets: [{
+                        data: [participation.high, participation.medium, participation.low],
+                        backgroundColor: [
+                            'rgba(40, 167, 69, 0.8)',
+                            'rgba(255, 193, 7, 0.8)',
+                            'rgba(220, 53, 69, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(40, 167, 69, 1)',
+                            'rgba(255, 193, 7, 1)',
+                            'rgba(220, 53, 69, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed;
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return context.label + ': ' + value + '次 (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 渲染抬头率建议
+        function renderHeadUpSuggestion(data) {
+            const container = document.getElementById('headUpSuggestion');
+            const avgRate = data.avg_head_up_rate || 0;
+            const trendData = data.head_up_trend || [];
+            
+            let suggestionHTML = '';
+            let boxClass = '';
+            
+            if (avgRate >= 80) {
+                boxClass = 'success';
+                suggestionHTML = `
+                    <p><i class="fas fa-thumbs-up text-success"></i> <strong>表现优秀！</strong> 你的平均抬头率达到 <strong>${avgRate}%</strong>，课堂专注度非常好！</p>
+                    <p>这说明你在课堂上始终保持高度专注，能够紧跟老师的教学节奏。请继续保持这种良好的学习习惯！</p>
+                `;
+            } else if (avgRate >= 60) {
+                boxClass = 'warning';
+                suggestionHTML = `
+                    <p><i class="fas fa-info-circle text-warning"></i> <strong>表现良好。</strong> 你的平均抬头率为 <strong>${avgRate}%</strong>，课堂专注度尚可。</p>
+                    <p>建议：<br>• 尽量减少课堂上的分心行为<br>• 积极参与课堂互动，提高专注度<br>• 保持眼神交流，跟随老师思路</p>
+                `;
+            } else {
+                boxClass = 'danger';
+                suggestionHTML = `
+                    <p><i class="fas fa-exclamation-triangle text-danger"></i> <strong>需要改进。</strong> 你的平均抬头率仅为 <strong>${avgRate}%</strong>，课堂专注度较低。</p>
+                    <p>建议：<br>• 调整学习状态，减少课堂分心<br>• 主动参与课堂讨论和提问<br>• 课前预习，带着问题听课<br>• 如遇到困难，及时向老师或同学求助</p>
+                `;
+            }
+            
+            // 添加趋势分析
+            if (trendData.length >= 2) {
+                const firstRate = trendData[0].rate;
+                const lastRate = trendData[trendData.length - 1].rate;
+                if (lastRate > firstRate + 10) {
+                    suggestionHTML += `<p class="text-success"><i class="fas fa-arrow-up"></i> <strong>好消息：</strong>你的抬头率呈现上升趋势，进步明显！</p>`;
+                } else if (lastRate < firstRate - 10) {
+                    suggestionHTML += `<p class="text-danger"><i class="fas fa-arrow-down"></i> <strong>注意：</strong>你的抬头率近期有所下降，请关注学习状态。</p>`;
+                }
+            }
+            
+            container.className = 'suggestion-box ' + boxClass;
+            container.querySelector('.suggestion-content').innerHTML = suggestionHTML;
+        }
+
+        // 渲染正确率建议
+        function renderCorrectRateSuggestion(data) {
+            const container = document.getElementById('correctRateSuggestion');
+            const avgRate = data.avg_correct_rate || 0;
+            
+            let suggestionHTML = '';
+            let boxClass = '';
+            
+            if (avgRate >= 80) {
+                boxClass = 'success';
+                suggestionHTML = `
+                    <p><i class="fas fa-trophy text-success"></i> <strong>学习效果出色！</strong> 你的答题正确率达到 <strong>${avgRate}%</strong>！</p>
+                    <p>这说明你对课程知识掌握得很好，理解能力强。建议：<br>• 继续保持当前的学习方法<br>• 可以尝试帮助其他同学，巩固自己的知识<br>• 挑战更高难度的题目</p>
+                `;
+            } else if (avgRate >= 60) {
+                boxClass = 'warning';
+                suggestionHTML = `
+                    <p><i class="fas fa-info-circle text-warning"></i> <strong>学习效果尚可。</strong> 你的答题正确率为 <strong>${avgRate}%</strong>。</p>
+                    <p>建议：<br>• 加强课后复习，巩固薄弱知识点<br>• 多做练习题，提高熟练度<br>• 遇到不懂的问题及时请教老师</p>
+                `;
+            } else {
+                boxClass = 'danger';
+                suggestionHTML = `
+                    <p><i class="fas fa-exclamation-triangle text-danger"></i> <strong>需要加强学习。</strong> 你的答题正确率为 <strong>${avgRate}%</strong>。</p>
+                    <p>建议：<br>• 重新复习基础知识，打好基础<br>• 课前预习，带着问题听课<br>• 课后及时复习，做好笔记<br>• 主动寻求老师或同学的帮助<br>• 制定学习计划，循序渐进</p>
+                `;
+            }
+            
+            container.className = 'suggestion-box ' + boxClass;
+            container.querySelector('.suggestion-content').innerHTML = suggestionHTML;
+        }
+
+        // 渲染课程建议
+        function renderCourseSuggestion(data) {
+            const container = document.getElementById('courseSuggestion');
+            const courseData = data.course_performance || [];
+            
+            if (courseData.length === 0) {
+                container.querySelector('.suggestion-content').innerHTML = '<p>暂无课程数据，请参与课程学习。</p>';
+                return;
+            }
+            
+            // 找出表现最好和最差的课程
+            const sortedByHeadUp = [...courseData].sort((a, b) => b.avg_head_up_rate - a.avg_head_up_rate);
+            const bestCourse = sortedByHeadUp[0];
+            const worstCourse = sortedByHeadUp[sortedByHeadUp.length - 1];
+            
+            let suggestionHTML = '';
+            
+            if (bestCourse.avg_head_up_rate >= 80) {
+                suggestionHTML += `<p><i class="fas fa-star text-success"></i> <strong>优势课程：</strong>《${bestCourse.course_name}》是你的优势科目，抬头率达到 ${bestCourse.avg_head_up_rate}%，请继续保持！</p>`;
+            }
+            
+            if (worstCourse.avg_head_up_rate < 60 && courseData.length > 1) {
+                suggestionHTML += `<p><i class="fas fa-exclamation-circle text-warning"></i> <strong>需关注课程：</strong>《${worstCourse.course_name}》的课堂专注度较低（${worstCourse.avg_head_up_rate}%），建议加强该课程的学习投入。</p>`;
+            }
+            
+            suggestionHTML += `<p><i class="fas fa-lightbulb text-primary"></i> <strong>学习建议：</strong><br>• 保持优势科目的学习热情<br>• 针对薄弱科目制定提升计划<br>• 合理分配各科学习时间</p>`;
+            
+            container.className = 'suggestion-box';
+            container.querySelector('.suggestion-content').innerHTML = suggestionHTML;
+        }
+
+        // 渲染参与度建议
+        function renderParticipationSuggestion(data) {
+            const container = document.getElementById('participationSuggestion');
+            const participation = data.participation_stats || { high: 0, medium: 0, low: 0 };
+            const total = participation.high + participation.medium + participation.low;
+            
+            if (total === 0) {
+                container.querySelector('.suggestion-content').innerHTML = '<p>暂无参与度数据。</p>';
+                return;
+            }
+            
+            const highRate = (participation.high / total * 100).toFixed(1);
+            
+            let suggestionHTML = `<p><strong>参与度统计：</strong><br>`;
+            suggestionHTML += `<span class="text-success"><i class="fas fa-smile"></i> 高参与度：${participation.high}次 (${highRate}%)</span><br>`;
+            suggestionHTML += `<span class="text-warning"><i class="fas fa-meh"></i> 中参与度：${participation.medium}次</span><br>`;
+            suggestionHTML += `<span class="text-danger"><i class="fas fa-frown"></i> 低参与度：${participation.low}次</span></p>`;
+            
+            if (highRate >= 60) {
+                suggestionHTML += `<p><i class="fas fa-thumbs-up text-success"></i> <strong>表扬！</strong> 你在大部分课堂中保持高参与度，学习态度积极！</p>`;
+            } else if (participation.low > participation.high) {
+                suggestionHTML += `<p><i class="fas fa-exclamation-triangle text-warning"></i> <strong>建议：</strong> 你的低参与度课堂较多，建议调整学习状态，更加积极地参与课堂互动。</p>`;
+            } else {
+                suggestionHTML += `<p><i class="fas fa-info-circle text-info"></i> 你的参与度分布较为均衡，建议争取更多高参与度的课堂表现。</p>`;
+            }
+            
+            container.className = 'suggestion-box';
+            container.querySelector('.suggestion-content').innerHTML = suggestionHTML;
+        }
+
+        // 渲染综合评价
+        function renderOverallSuggestion(data) {
+            const container = document.getElementById('overallSuggestion');
+            const avgHeadUp = data.avg_head_up_rate || 0;
+            const avgCorrect = data.avg_correct_rate || 0;
+            const rank = data.class_rank || 0;
+            const totalStudents = data.total_class_students || 0;
+            
+            let suggestionHTML = '';
+            
+            // 综合评分
+            let overallScore = 0;
+            if (avgHeadUp >= 80) overallScore += 2;
+            else if (avgHeadUp >= 60) overallScore += 1;
+            
+            if (avgCorrect >= 80) overallScore += 2;
+            else if (avgCorrect >= 60) overallScore += 1;
+            
+            if (overallScore >= 4) {
+                suggestionHTML += `<p><i class="fas fa-award" style="color: #ffd700;"></i> <strong>综合评价：优秀</strong> 你的课堂表现非常出色，无论是专注度还是学习效果都很好，请继续保持！</p>`;
+            } else if (overallScore >= 2) {
+                suggestionHTML += `<p><i class="fas fa-thumbs-up" style="color: #90ee90;"></i> <strong>综合评价：良好</strong> 你的课堂表现整体不错，在某些方面还有提升空间，参考上述建议继续努力！</p>`;
+            } else {
+                suggestionHTML += `<p><i class="fas fa-hand-holding-heart" style="color: #ffa07a;"></i> <strong>综合评价：需努力</strong> 你的课堂表现有待提升，建议认真参考上述建议，调整学习方法，争取进步！</p>`;
+            }
+            
+            // 班级排名
+            if (rank && totalStudents) {
+                if (rank <= 3) {
+                    suggestionHTML += `<p><i class="fas fa-trophy text-warning"></i> <strong>班级排名：第${rank}名</strong>（共${totalStudents}人）你在班级中表现优异，是同学们学习的榜样！</p>`;
+                } else if (rank <= totalStudents * 0.5) {
+                    suggestionHTML += `<p><i class="fas fa-chart-line text-info"></i> <strong>班级排名：第${rank}名</strong>（共${totalStudents}人）你在班级中处于中上水平，继续努力可以取得更好成绩！</p>`;
+                } else {
+                    suggestionHTML += `<p><i class="fas fa-arrow-up text-danger"></i> <strong>班级排名：第${rank}名</strong>（共${totalStudents}人）你还有很大的进步空间，加油！</p>`;
+                }
+            }
+            
+            // 总体建议
+            suggestionHTML += `<p style="margin-top: 15px;"><i class="fas fa-lightbulb"></i> <strong>总体建议：</strong></p>`;
+            suggestionHTML += `<ul style="padding-left: 20px; margin: 10px 0;">`;
+            
+            if (avgHeadUp < 60) {
+                suggestionHTML += `<li>提高课堂专注度是你的首要任务，建议减少分心，积极参与课堂</li>`;
+            }
+            if (avgCorrect < 60) {
+                suggestionHTML += `<li>加强课后复习和练习，巩固知识点，提高答题正确率</li>`;
+            }
+            if (avgHeadUp >= 60 && avgCorrect >= 60) {
+                suggestionHTML += `<li>保持良好的学习习惯，继续加油，争取更好的成绩</li>`;
+            }
+            suggestionHTML += `<li>定期查看互动评估，了解自己的进步情况</li>`;
+            suggestionHTML += `</ul>`;
+            
+            container.innerHTML = suggestionHTML;
+        }
+
+        // 退出登录
+        function logout() {
+            fetch('/student/logout', {
+                method: 'POST',
+                credentials: 'include'
+            })
+            .then(() => {
+                window.location.href = '/student/login';
+            })
+            .catch(error => {
+                console.error('退出失败:', error);
+                window.location.href = '/student/login';
+            });
+        }
+    </script>
+</body>
+</html>

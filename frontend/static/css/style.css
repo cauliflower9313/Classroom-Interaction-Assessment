@@ -1,0 +1,483 @@
+/* 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background-color: #f8f9fa;
+    min-height: 100vh;
+}
+
+/* 登录页面样式 */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 450px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* 学生页面样式 */
+.student-container {
+    padding: 20px;
+}
+
+.status-card {
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.video-container {
+    width: 100%;
+    height: 400px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+#audioResult {
+    min-height: 100px;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+}
+
+/* 教师页面样式 */
+.teacher-container {
+    padding: 20px;
+}
+
+.stat-card {
+    text-align: center;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.stat-value {
+    font-size: 36px;
+    font-weight: bold;
+    color: #0d6efd;
+    margin: 10px 0;
+}
+
+.chart-container {
+    height: 400px;
+    margin-bottom: 30px;
+}
+
+/* 多模态文本功能样式 */
+
+/* 问题容器样式 */
+.questions-container {
+    margin-top: 20px;
+    border-radius: 10px;
+    background-color: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+}
+
+.questions-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.question-item {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.question-item:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.question-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.question-header h4 {
+    margin: 0;
+    color: #212529;
+    font-size: 16px;
+    flex: 1;
+}
+
+.question-type {
+    background-color: #0d6efd;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.question-score {
+    background-color: #198754;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.status-badge.active {
+    background-color: #198754;
+    color: white;
+}
+
+.status-badge.inactive {
+    background-color: #6c757d;
+    color: white;
+}
+
+.question-content {
+    margin-bottom: 10px;
+}
+
+.question-content p {
+    margin: 5px 0;
+    color: #495057;
+}
+
+.question-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.publish-time {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.question-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.answer-btn, .view-answers-btn, .publish-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+.answer-btn {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.answer-btn:hover {
+    background-color: #0b5ed7;
+}
+
+.view-answers-btn {
+    background-color: #198754;
+    color: white;
+}
+
+.view-answers-btn:hover {
+    background-color: #157347;
+}
+
+.publish-btn {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.publish-btn:hover {
+    background-color: #ffca2c;
+}
+
+.delete-btn {
+    background-color: #dc3545;
+    color: white;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.delete-btn:hover {
+    background-color: #bb2d3b;
+}
+
+.answered-badge {
+    background-color: #6c757d;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+/* 模态框样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 5% auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.close {
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6c757d;
+}
+
+.close:hover {
+    color: #212529;
+}
+
+/* 答题表单样式 */
+.answer-form {
+    margin: 20px 0;
+}
+
+.option-item {
+    display: block;
+    padding: 10px;
+    margin: 8px 0;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.option-item:hover {
+    background-color: #f8f9fa;
+    border-color: #0d6efd;
+}
+
+.option-item input[type="radio"] {
+    margin-right: 8px;
+}
+
+.answer-timer {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 15px;
+    text-align: center;
+    font-weight: bold;
+    color: #856404;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.modal-actions button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.modal-actions button:first-child {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.modal-actions button:last-child {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* 表单样式 */
+.form-container {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #495057;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.form-actions button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.form-actions button:first-child {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.form-actions button:last-child {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* 统计卡片样式 */
+.stat-card {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card h4 {
+    margin-bottom: 15px;
+    color: #495057;
+    border-bottom: 2px solid #0d6efd;
+    padding-bottom: 8px;
+}
+
+.stat-card p {
+    margin: 8px 0;
+    color: #6c757d;
+}
+
+.stat-card p span {
+    color: #0d6efd;
+    font-weight: bold;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .video-container {
+        height: 300px;
+    }
+
+    .chart-container {
+        height: 300px;
+    }
+
+    .stat-value {
+        font-size: 28px;
+    }
+    
+    .question-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .question-footer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+}
+
+/* 状态标签样式 */
+.status-badge {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.status-ready {
+    background-color: #e9ecef;
+    color: #6c757d;
+}
+
+.status-recording {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-error {
+    background-color: #f8d7da;
+    color: #721c24;
+}

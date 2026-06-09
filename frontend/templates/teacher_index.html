@@ -1,0 +1,1953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教师主页 - 课堂互动系统</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .sidebar { position: fixed; left: 0; top: 0; height: 100vh; }
+        .main-content { margin-left: var(--sidebar-width); }
+        .content-tab { display: none; }
+        .content-tab.active { display: block; }
+        .classroom-tab-content, .course-tab-content, .record-tab-content, 
+        .question-tab-content, .student-tab-content { display: none; }
+        .classroom-tab-content.active, .course-tab-content.active, .record-tab-content.active,
+        .question-tab-content.active, .student-tab-content.active { display: block; }
+        .dropdown-checkbox { position: relative; width: 100%; min-width: 180px; }
+        .dropdown-checkbox .dropdown-header {
+            padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: var(--border-radius);
+            background: var(--white); cursor: pointer; display: flex; justify-content: space-between;
+            align-items: center; transition: var(--transition);
+        }
+        .dropdown-checkbox .dropdown-header:hover { border-color: var(--primary-color); }
+        .dropdown-checkbox .dropdown-header::after { content: '▼'; font-size: 10px; color: var(--gray-500); }
+        .dropdown-checkbox.active .dropdown-header::after { transform: rotate(180deg); }
+        .dropdown-checkbox .dropdown-content {
+            position: absolute; top: 100%; left: 0; right: 0; background: var(--white);
+            border: 1px solid var(--gray-300); border-top: none; border-radius: 0 0 var(--border-radius) var(--border-radius);
+            padding: 8px; box-shadow: var(--box-shadow-lg); z-index: 1000; display: none;
+            max-height: 200px; overflow-y: auto;
+        }
+        .dropdown-checkbox.active .dropdown-content { display: block; }
+        .dropdown-checkbox .checkbox-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 14px; }
+        .dropdown-checkbox .checkbox-item:hover { background: var(--gray-100); border-radius: 4px; }
+        .dropdown-checkbox .checkbox-item input { width: 16px; height: 16px; }
+        .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+        @media (max-width: 992px) { .chart-row { grid-template-columns: 1fr; } }
+        .chart-box { background: var(--white); border-radius: var(--border-radius-lg); padding: 20px; }
+        .chart-box h4 { font-size: 16px; font-weight: 600; color: var(--gray-800); margin-bottom: 16px; }
+    </style>
+    <script src="/static/js/teacher/modules/dashboard.js?v=2.3"></script>
+    <script src="/static/js/teacher/modules/records.js?v=2.3"></script>
+    <script src="/static/js/teacher/modules/students.js?v=2.3"></script>
+    <script src="/static/js/teacher/modules/classroom.js?v=2.3"></script>
+    <script src="/static/js/teacher/modules/questions.js?v=2.3"></script>
+    <script src="/static/js/teacher/modules/evaluation.js?v=2.3"></script>
+    <script src="/static/js/teacher.js?v=2.3"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>课堂互动系统</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-item active" onclick="switchTab('dashboard')">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>数据仪表盘</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('students')">
+                    <i class="fas fa-users"></i>
+                    <span>学生管理</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('classroom')">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                    <span>课堂管理</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('evaluation'); loadEvaluationData();">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>互动评估</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('records'); loadCourseFilterOptions();">
+                    <i class="fas fa-history"></i>
+                    <span>记录查询</span>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 顶部导航 -->
+            <header class="top-header">
+                <h1 class="header-title">数据仪表盘</h1>
+                <div class="header-actions">
+                    <div class="user-info">
+                        <div class="user-avatar">{{ teacher_name[:1] if teacher_name else teacher_id[:1] }}</div>
+                        <span class="user-name">{{ teacher_name if teacher_name else teacher_id }}</span>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> 退出
+                    </button>
+                </div>
+            </header>
+
+            <!-- 内容区域 -->
+            <div class="content-area">
+                <!-- 仪表盘 -->
+                <div class="content-tab active" id="dashboard-tab">
+                    <!-- 第一行：总学生数、专业数、班级数、课程数 -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon primary"><i class="fas fa-users"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="totalStudents">0</div>
+                                <div class="stat-label">总学生数</div>
+                            </div>
+                        </div>
+                        <div class="stat-card" onclick="showMajorDistributionModal()" style="cursor: pointer;" title="点击查看专业分布">
+                            <div class="stat-icon warning"><i class="fas fa-graduation-cap"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="totalMajors">0</div>
+                                <div class="stat-label">专业数</div>
+                            </div>
+                        </div>
+                        <div class="stat-card" onclick="showClassDistributionModal()" style="cursor: pointer;" title="点击查看班级分布">
+                            <div class="stat-icon success"><i class="fas fa-chalkboard"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="totalClasses">0</div>
+                                <div class="stat-label">班级数</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon info"><i class="fas fa-book"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="totalCourses">0</div>
+                                <div class="stat-label">课程数</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 第二行：提问总数、平均抬头率、答题总数、平均正确率 -->
+                    <div class="stats-grid">
+                        <div class="stat-card" onclick="showCourseQuestionModal()" style="cursor: pointer;" title="点击查看各课程识别提问数">
+                            <div class="stat-icon warning"><i class="fas fa-microphone"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="totalQuestions">0</div>
+                                <div class="stat-label">提问总数</div>
+                            </div>
+                        </div>
+                        <div class="stat-card" onclick="showHeadUpRateModal()" style="cursor: pointer;" title="点击查看各班级抬头率">
+                            <div class="stat-icon info"><i class="fas fa-chart-line"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="avgHeadUpRate">0%</div>
+                                <div class="stat-label">平均抬头率</div>
+                            </div>
+                        </div>
+                        <div class="stat-card" onclick="showQuestionTypeModal()" style="cursor: pointer;" title="点击查看问题类型分布">
+                            <div class="stat-icon primary"><i class="fas fa-pencil-alt"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="totalAnswers">0</div>
+                                <div class="stat-label">答题总数</div>
+                            </div>
+                        </div>
+                        <div class="stat-card" onclick="showCorrectRateModal()" style="cursor: pointer;" title="点击查看各班级正确率">
+                            <div class="stat-icon success"><i class="fas fa-check-circle"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="avgCorrectRate">0%</div>
+                                <div class="stat-label">平均正确率</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-row">
+                        <div class="chart-box">
+                            <h4><i class="fas fa-chart-line text-primary"></i> 答题趋势（最近7天）</h4>
+                            <canvas id="answerTrendChart"></canvas>
+                        </div>
+                        <div class="chart-box">
+                            <h4><i class="fas fa-brain text-primary"></i> 知识点回答准确率</h4>
+                            <canvas id="categoryAccuracyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-row">
+                        <div class="chart-box">
+                            <h4><i class="fas fa-book-open text-primary"></i> 课程参与度分布</h4>
+                            <canvas id="courseParticipationChart"></canvas>
+                        </div>
+                        <div class="chart-box">
+                            <h4><i class="fas fa-tasks text-primary"></i> 问题类型正确率</h4>
+                            <canvas id="questionTypeAccuracyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学生管理 -->
+                <div class="content-tab" id="students-tab">
+                    <div class="page-header">
+                        <h2 class="page-title">学生管理</h2>
+                        <p class="page-subtitle">管理学生信息和班级数据</p>
+                    </div>
+                    <div class="tab-nav">
+                        <button class="tab-btn active" onclick="switchStudentTab('list')">
+                            <i class="fas fa-list"></i> 学生列表
+                        </button>
+                        <button class="tab-btn" onclick="switchStudentTab('import')">
+                            <i class="fas fa-file-import"></i> 批量导入
+                        </button>
+                        <button class="tab-btn" onclick="switchStudentTab('export')">
+                            <i class="fas fa-file-export"></i> 导出数据
+                        </button>
+                        <button class="tab-btn" onclick="switchStudentTab('operation')">
+                            <i class="fas fa-history"></i> 操作记录
+                        </button>
+                    </div>
+                    <div class="student-tab-content active" id="student-list-tab">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-search"></i> 搜索筛选</div>
+                            </div>
+                            <div class="panel-body">
+                                <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                                    <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                        <label class="form-label">搜索学生</label>
+                                        <input type="text" class="form-control" id="studentSearchInput" placeholder="输入学号或姓名...">
+                                    </div>
+                                    <div class="form-group" style="flex: 1; min-width: 120px; margin-bottom: 0;">
+                                        <label class="form-label">年级</label>
+                                        <select class="form-control" id="studentGradeFilter" onfocus="loadStudentFilterOptions()">
+                                            <option value="">全部年级</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                        <label class="form-label">专业</label>
+                                        <select class="form-control" id="studentMajorFilter" onfocus="loadStudentFilterOptions()">
+                                            <option value="">全部专业</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                        <label class="form-label">班级</label>
+                                        <select class="form-control" id="studentClassFilter" onfocus="loadStudentFilterOptions()">
+                                            <option value="">全部班级</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="filterStudents()">
+                                        <i class="fas fa-search"></i> 搜索
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="resetStudentFilter()">
+                                        <i class="fas fa-redo"></i> 重置
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-users"></i> 学生列表</div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn btn-danger btn-sm" id="batchDeleteBtn" onclick="batchDeleteStudents()" style="display: none;">
+                                        <i class="fas fa-trash-alt"></i> 批量删除 (<span id="selectedCount">0</span>)
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" onclick="showAddStudentModal()">
+                                        <i class="fas fa-plus"></i> 添加学生
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="panel-body" style="padding: 0;">
+                                <div class="table-container">
+                                    <table class="table" id="studentTable">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 40px;"><input type="checkbox" id="selectAllStudents" onchange="toggleSelectAllStudents()" style="transform: scale(1.2);"></th>
+                                                <th>学号</th>
+                                                <th>姓名</th>
+                                                <th>年级</th>
+                                                <th>专业</th>
+                                                <th>班级</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="studentTableBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="student-tab-content" id="student-import-tab">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-file-excel"></i> 批量导入学生</div>
+                            </div>
+                            <div class="panel-body">
+                                <!-- 上传区域 -->
+                                <div id="importUploadSection">
+                                    <div class="form-group">
+                                        <label class="form-label">选择Excel文件</label>
+                                        <input type="file" class="form-control" id="studentImportFile" accept=".xlsx,.xls,.csv" onchange="previewImportFile()">
+                                    </div>
+                                    <div class="form-group">
+                                        <button class="btn btn-secondary" onclick="downloadStudentTemplate()">
+                                            <i class="fas fa-download"></i> 下载模板
+                                        </button>
+                                    </div>
+                                    <div style="margin-top: 16px; padding: 16px; background: var(--gray-100); border-radius: var(--border-radius);">
+                                        <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;"><i class="fas fa-info-circle text-primary"></i> 文件格式说明</h4>
+                                        <p style="font-size: 13px; color: var(--gray-600); margin-bottom: 8px;">Excel文件需包含以下列：</p>
+                                        <ul style="font-size: 13px; color: var(--gray-600); margin-left: 20px;">
+                                            <li><strong>学号</strong>：学生学号</li>
+                                            <li><strong>姓名</strong>：学生姓名</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <!-- 预览区域 -->
+                                <div id="importPreviewSection" style="display: none;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                        <div>
+                                            <span class="badge badge-primary" id="previewTotalCount">共 0 名学生</span>
+                                            <span class="badge badge-success" id="previewNewCount" style="margin-left: 8px;">新增 0 人</span>
+                                            <span class="badge badge-warning" id="previewDuplicateCount" style="margin-left: 8px;">已存在 0 人</span>
+                                        </div>
+                                        <button class="btn btn-secondary btn-sm" onclick="resetStudentImportForm()">
+                                            <i class="fas fa-undo"></i> 重新选择
+                                        </button>
+                                    </div>
+                                    <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+                                        <table class="table" id="previewTable">
+                                            <thead>
+                                                <tr>
+                                                    <th><input type="checkbox" id="selectAllPreview" onchange="toggleSelectAllPreview()"></th>
+                                                    <th>学号</th>
+                                                    <th>姓名</th>
+                                                    <th>年级</th>
+                                                    <th>专业</th>
+                                                    <th>班级</th>
+                                                    <th>状态</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="previewTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <div class="form-group" style="margin-top: 20px;">
+                                        <button class="btn btn-primary" onclick="confirmImportStudents()">
+                                            <i class="fas fa-check"></i> 确认导入
+                                        </button>
+                                        <button class="btn btn-secondary" onclick="resetStudentImportForm()">
+                                            <i class="fas fa-times"></i> 取消
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="student-tab-content" id="student-export-tab">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-file-export"></i> 导出学生数据</div>
+                            </div>
+                            <div class="panel-body">
+                                <p style="color: var(--gray-600); margin-bottom: 20px;">选择要导出的数据范围：</p>
+                                <div class="form-group">
+                                    <select class="form-control" id="exportClassSelect">
+                                        <option value="">全部班级</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary" onclick="exportStudents()">
+                                    <i class="fas fa-download"></i> 导出Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作记录 -->
+                    <div class="student-tab-content" id="student-operation-tab">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-history"></i> 操作记录</div>
+                                <button class="btn btn-primary btn-sm" onclick="loadStudentOperationRecords()">
+                                    <i class="fas fa-sync-alt"></i> 刷新
+                                </button>
+                            </div>
+                            <div class="panel-body" id="operationRecordsContainer">
+                                <div class="empty-state">
+                                    <i class="fas fa-history"></i>
+                                    <p>加载中...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 课堂管理 -->
+                <div class="content-tab" id="classroom-tab">
+                    <div class="page-header">
+                        <h2 class="page-title">课堂管理</h2>
+                        <p class="page-subtitle">创建和管理课程</p>
+                    </div>
+                    <div class="tab-nav">
+                        <button class="tab-btn" onclick="switchClassroomTab('create')">
+                            <i class="fas fa-plus"></i> 创建课程
+                        </button>
+                        <button class="tab-btn active" onclick="switchClassroomTab('manage')">
+                            <i class="fas fa-book"></i> 课程管理
+                        </button>
+                    </div>
+                    <div class="classroom-tab-content" id="create-classroom-tab">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-plus-circle"></i> 创建新课程</div>
+                            </div>
+                            <div class="panel-body">
+                                <div class="form-group">
+                                    <label class="form-label">课程名称 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="courseName" placeholder="请输入课程名称">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">课程描述</label>
+                                    <textarea class="form-control" id="courseDescription" rows="3" placeholder="请输入课程描述"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">选择学生</label>
+                                    <div style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; align-items: flex-start;">
+                                        <div class="dropdown-checkbox" id="courseClassDropdownWrapper" style="position: relative; width: 200px;">
+                                            <div class="dropdown-header" onclick="toggleCourseClassDropdown()" style="padding: 8px 12px; border: 1px solid var(--gray-200); border-radius: var(--border-radius); background: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                                <span id="courseClassSelectedText">选择班级</span>
+                                                <i class="fas fa-chevron-down" style="color: var(--gray-500);"></i>
+                                            </div>
+                                            <div id="courseClassDropdownContent" style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: var(--border-radius); background: white; z-index: 1000; margin-top: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-secondary btn-sm" onclick="selectClassStudentsForCourse('create')">
+                                            <i class="fas fa-filter"></i> 筛选班级
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm" onclick="selectAllStudentsForCourse('create')">
+                                            <i class="fas fa-users"></i> 全部学生
+                                        </button>
+                                        <input type="text" class="form-control" id="courseStudentSearch" placeholder="输入学号或姓名搜索..." style="width: 150px;">
+                                        <button class="btn btn-primary btn-sm" onclick="searchAndAddStudent('create')">
+                                            <i class="fas fa-search"></i> 搜索添加
+                                        </button>
+                                    </div>
+                                    <div id="createCourseStudentList" style="min-height: 150px; max-height: 300px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: var(--border-radius); padding: 16px;">
+                                        <p style="color: var(--gray-500); text-align: center;">请点击按钮选择学生</p>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <button class="btn btn-primary" onclick="createCourse()">
+                                        <i class="fas fa-save"></i> 创建课程
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="classroom-tab-content active" id="manage-classroom-tab">
+                        <!-- 课程列表区域 -->
+                        <div id="courseListSection">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div class="panel-title"><i class="fas fa-book"></i> 我的课程</div>
+                                    <button class="btn btn-primary btn-sm" onclick="loadCourseList()">
+                                        <i class="fas fa-sync-alt"></i> 刷新
+                                    </button>
+                                </div>
+                                <div class="panel-body" id="courseListContainer">
+                                    <div class="empty-state">
+                                        <i class="fas fa-book-open"></i>
+                                        <p>暂无课程数据</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 课程详情区域 -->
+                        <div id="courseDetailSection" style="display: none;">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <button class="btn btn-secondary btn-sm" onclick="hideCourseDetail()" style="margin-right: 10px;">
+                                        <i class="fas fa-arrow-left"></i> 返回
+                                    </button>
+                                    <div class="panel-title"><i class="fas fa-book"></i> <span id="selectedCourseName">课程详情</span></div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button class="btn btn-success btn-sm" id="startClassBtn" onclick="startClassSession()">
+                                            <i class="fas fa-play"></i> 开始上课
+                                        </button>
+                                        <button class="btn btn-warning btn-sm" id="endClassBtn" onclick="endClassSession()" style="display: none;">
+                                            <i class="fas fa-stop"></i> 结束上课
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteCourse()">
+                                            <i class="fas fa-trash"></i> 删除课程
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="panel-body">
+                                    <!-- 课程详情标签导航 -->
+                                    <div class="tab-nav" style="margin-bottom: 20px;">
+                                        <button class="course-tab-btn active" onclick="switchCourseTab('students', event)" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                            <i class="fas fa-users"></i> 课程学生
+                                        </button>
+                                        <button class="course-tab-btn" onclick="switchCourseTab('questions', event)" style="padding: 8px 16px; background: #f8f9fa; color: var(--dark-color); border: none; border-radius: 4px; cursor: pointer;">
+                                            <i class="fas fa-question-circle"></i> 问题管理
+                                        </button>
+                                        <button class="course-tab-btn" onclick="switchCourseTab('sessions', event)" style="padding: 8px 16px; background: #f8f9fa; color: var(--dark-color); border: none; border-radius: 4px; cursor: pointer;">
+                                            <i class="fas fa-history"></i> 课堂记录
+                                        </button>
+                                        <button class="course-tab-btn" onclick="switchCourseTab('settings', event)" style="padding: 8px 16px; background: #f8f9fa; color: var(--dark-color); border: none; border-radius: 4px; cursor: pointer;">
+                                            <i class="fas fa-cog"></i> 课程设置
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- 课程学生 -->
+                                    <div id="course-students-tab" class="course-tab-content" style="display: block;">
+                                        <!-- 添加学生区域 -->
+                                        <div id="addStudentToCourseSection" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                                            <h6 style="margin: 0 0 15px 0; color: var(--dark-color);"><i class="fas fa-user-plus"></i> 添加学生到课程</h6>
+                                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;">
+                                                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                                                    <label class="form-label" style="font-size: 12px;">搜索学生</label>
+                                                    <input type="text" class="form-control" id="searchStudentForCourse" placeholder="输入学号或姓名搜索" onkeyup="if(event.keyCode===13)searchStudentForCourseAdd()">
+                                                </div>
+                                                <button class="btn btn-secondary" onclick="searchStudentForCourseAdd()">
+                                                    <i class="fas fa-search"></i> 搜索
+                                                </button>
+                                                <button class="btn btn-outline-secondary" onclick="hideAddStudentSection()">
+                                                    <i class="fas fa-times"></i> 取消
+                                                </button>
+                                            </div>
+                                            <!-- 搜索结果 -->
+                                            <div id="searchStudentResultForCourse" style="margin-top: 15px; display: none;">
+                                                <div id="searchStudentResultList"></div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 学生列表操作栏 -->
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                            <h6 style="margin: 0; color: var(--dark-color);"><i class="fas fa-users"></i> 课程学生列表</h6>
+                                            <button class="btn btn-primary btn-sm" onclick="showAddStudentSection()">
+                                                <i class="fas fa-user-plus"></i> 添加学生
+                                            </button>
+                                        </div>
+                                        <div id="courseStudentList">
+                                            <p style="color: var(--secondary-color); text-align: center; padding: 20px;">暂无学生数据</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 问题管理 -->
+                                    <div id="course-questions-tab" class="course-tab-content" style="display: none;">
+                                        <!-- 问题管理子标签 -->
+                                        <div class="tab-nav" style="margin-bottom: 15px;">
+                                            <button class="course-question-tab-btn active" onclick="switchCourseQuestionTab('list', event)" style="padding: 6px 14px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                                                <i class="fas fa-list"></i> 问题列表
+                                            </button>
+                                            <button class="course-question-tab-btn" onclick="switchCourseQuestionTab('create', event)" style="padding: 6px 14px; background: #f8f9fa; color: var(--dark-color); border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                                                <i class="fas fa-plus"></i> 创建问题
+                                            </button>
+                                            <button class="course-question-tab-btn" onclick="switchCourseQuestionTab('import', event)" style="padding: 6px 14px; background: #f8f9fa; color: var(--dark-color); border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">
+                                                <i class="fas fa-file-import"></i> 批量导入
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- 问题列表 -->
+                                        <div id="course-question-list-tab" class="course-question-content" style="display: block;">
+                                            <div class="panel" style="margin-bottom: 15px;">
+                                                <div class="panel-header" style="padding: 10px 15px;">
+                                                    <div class="panel-title"><i class="fas fa-filter"></i> 筛选条件</div>
+                                                </div>
+                                                <div class="panel-body" style="padding: 15px;">
+                                                    <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                                                        <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                                            <label class="form-label">问题类型</label>
+                                                            <select class="form-control" id="courseQuestionTypeFilter">
+                                                                <option value="">全部类型</option>
+                                                                <option value="single_choice">单选题</option>
+                                                                <option value="multiple_choice">多选题</option>
+                                                                <option value="judgment">判断题</option>
+                                                                <option value="subjective">主观题</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                                            <label class="form-label">知识点分类</label>
+                                                            <select class="form-control" id="courseQuestionCategoryFilter">
+                                                                <option value="">全部分类</option>
+                                                            </select>
+                                                        </div>
+                                                        <button class="btn btn-primary" onclick="filterCourseQuestions()">
+                                                            <i class="fas fa-search"></i> 筛选
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="panel">
+                                                <div class="panel-header" style="padding: 10px 15px;">
+                                                    <div class="panel-title"><i class="fas fa-question-circle"></i> 问题列表</div>
+                                                </div>
+                                                <div class="panel-body" style="padding: 0;">
+                                                    <div class="table-container">
+                                                        <table class="table" id="courseQuestionTable">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>题目</th>
+                                                                    <th>类型</th>
+                                                                    <th>分类</th>
+                                                                    <th>状态</th>
+                                                                    <th>创建时间</th>
+                                                                    <th>操作</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="courseQuestionTableBody"></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 创建问题 -->
+                                        <div id="course-question-create-tab" class="course-question-content" style="display: none;">
+                                            <div class="panel">
+                                                <div class="panel-header" style="padding: 10px 15px;">
+                                                    <div class="panel-title"><i class="fas fa-plus-circle"></i> 创建新问题</div>
+                                                </div>
+                                                <div class="panel-body" style="padding: 15px;">
+                                                    <div class="form-group">
+                                                        <label class="form-label">题目内容 <span class="text-danger">*</span></label>
+                                                        <textarea class="form-control" id="courseQuestionTitle" rows="3" placeholder="请输入题目内容"></textarea>
+                                                    </div>
+                                                    <div style="display: flex; gap: 16px;">
+                                                        <div class="form-group" style="flex: 1;">
+                                                            <label class="form-label">问题类型</label>
+                                                            <select class="form-control" id="courseQuestionType" onchange="updateCourseQuestionOptions()">
+                                                                <option value="single_choice">单选题</option>
+                                                                <option value="multiple_choice">多选题</option>
+                                                                <option value="judgment">判断题</option>
+                                                                <option value="subjective">主观题</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="form-group" style="flex: 1;">
+                                                            <label class="form-label">知识点分类</label>
+                                                            <div class="dropdown" id="courseCategoryDropdown" style="position: relative;">
+                                                                <div class="form-control" onclick="toggleCourseCategoryDropdownMenu()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                                                    <span id="courseCategorySelectedText">请选择分类</span>
+                                                                    <i class="fas fa-chevron-down" style="color: #6c757d;"></i>
+                                                                </div>
+                                                                <div id="courseCategoryDropdownMenu" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e9ecef; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; max-height: 200px; overflow-y: auto;">
+                                                                    <div class="category-option" onclick="selectCourseCategoryForCreate('默认分类', event)" style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;">默认分类</div>
+                                                                    <div class="category-option" onclick="showAddCategoryModalForCreate(event)" style="padding: 10px 15px; cursor: pointer; color: #007bff; font-weight: 500;"><i class="fas fa-plus"></i> 自定义类别</div>
+                                                                </div>
+                                                            </div>
+                                                            <input type="hidden" id="courseQuestionCategory" value="">
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group" id="courseQuestionOptionsGroup">
+                                                        <label class="form-label" id="courseQuestionOptionsLabel">选项</label>
+                                                        <!-- 普通选项（单选/多选） -->
+                                                        <div id="courseQuestionOptions">
+                                                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                                                <input type="radio" name="courseCorrectOption" value="A" style="width: 20px;">
+                                                                <input type="text" class="form-control" placeholder="选项A" data-option="A">
+                                                            </div>
+                                                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                                                <input type="radio" name="courseCorrectOption" value="B" style="width: 20px;">
+                                                                <input type="text" class="form-control" placeholder="选项B" data-option="B">
+                                                            </div>
+                                                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                                                <input type="radio" name="courseCorrectOption" value="C" style="width: 20px;">
+                                                                <input type="text" class="form-control" placeholder="选项C" data-option="C">
+                                                            </div>
+                                                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                                                <input type="radio" name="courseCorrectOption" value="D" style="width: 20px;">
+                                                                <input type="text" class="form-control" placeholder="选项D" data-option="D">
+                                                            </div>
+                                                        </div>
+                                                        <!-- 判断题选项（下拉列表） -->
+                                                        <div id="courseJudgmentOptions" style="display: none;">
+                                                            <select class="form-control" id="courseJudgmentAnswer" style="width: 100%; padding: 10px; border: 1px solid var(--gray-200); border-radius: var(--border-radius);">
+                                                                <option value="正确">正确</option>
+                                                                <option value="错误">错误</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <label class="form-label">正确答案</label>
+                                                        <input type="text" class="form-control" id="courseQuestionAnswer" placeholder="单选填选项字母(如A)，判断填对/错，简答可不填">
+                                                    </div>
+                                                    <div class="form-group">
+                                                        <button class="btn btn-primary" onclick="createCourseQuestion()">
+                                                            <i class="fas fa-save"></i> 保存问题
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 批量导入 -->
+                                        <div id="course-question-import-tab" class="course-question-content" style="display: none;">
+                                            <div class="panel">
+                                                <div class="panel-header" style="padding: 10px 15px;">
+                                                    <div class="panel-title"><i class="fas fa-file-excel"></i> 批量导入问题</div>
+                                                </div>
+                                                <div class="panel-body" style="padding: 15px;">
+                                                    <!-- 文件上传区域 -->
+                                                    <div id="courseQuestionFileUploadArea" style="border: 2px dashed #e9ecef; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 15px; cursor: pointer;" onclick="document.getElementById('courseQuestionImportFile').click()">
+                                                        <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: #6c757d; margin-bottom: 10px;"></i>
+                                                        <p style="margin: 0; color: #6c757d;">点击或拖拽文件到此处上传</p>
+                                                        <p style="margin: 5px 0 0 0; color: #adb5bd; font-size: 12px;">支持 .xlsx, .xls 格式</p>
+                                                    </div>
+                                                    <input type="file" id="courseQuestionImportFile" accept=".xlsx,.xls" style="display: none;" onchange="previewCourseQuestionImport(event)">
+                                                    
+                                                    <!-- 预览区域 -->
+                                                    <div id="courseQuestionPreview" style="display: none; margin-bottom: 15px;"></div>
+                                                    
+                                                    <!-- 消息提示 -->
+                                                    <div id="courseQuestionImportMessage" class="message" style="margin-bottom: 15px;"></div>
+                                                    
+                                                    <div class="form-group">
+                                                        <button class="btn btn-primary" onclick="importCourseQuestions()">
+                                                            <i class="fas fa-upload"></i> 开始导入
+                                                        </button>
+                                                        <button class="btn btn-secondary" onclick="downloadCourseQuestionTemplate()">
+                                                            <i class="fas fa-download"></i> 下载模板
+                                                        </button>
+                                                        <button class="btn btn-outline-secondary" onclick="resetCourseQuestionImport()">
+                                                            <i class="fas fa-undo"></i> 重置
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+
+                                    </div>
+                                    
+                                    <!-- 课堂记录 -->
+                                    <div id="course-sessions-tab" class="course-tab-content" style="display: none;">
+                                        <div class="panel">
+                                            <div class="panel-header" style="padding: 10px 15px;">
+                                                <div class="panel-title"><i class="fas fa-history"></i> 课堂记录列表</div>
+                                            </div>
+                                            <div class="panel-body" style="padding: 0;">
+                                                <div class="table-container">
+                                                    <table class="table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>课堂名称</th>
+                                                                <th>开始时间</th>
+                                                                <th>结束时间</th>
+                                                                <th>学生数</th>
+                                                                <th>问题数</th>
+                                                                <th>异常学生</th>
+                                                                <th>状态</th>
+                                                                <th>操作</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="courseSessionsTableBody">
+                                                            <tr>
+                                                                <td colspan="8" style="text-align: center; color: #6c757d;">暂无课堂记录</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 课程设置 -->
+                                    <div id="course-settings-tab" class="course-tab-content" style="display: none;">
+                                        <div class="form-group">
+                                            <label class="form-label">课程名称</label>
+                                            <input type="text" class="form-control" id="courseNameEdit" placeholder="请输入课程名称">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">课程描述</label>
+                                            <textarea class="form-control" id="courseDescriptionEdit" rows="3" placeholder="请输入课程描述"></textarea>
+                                        </div>
+                                        <button class="btn btn-primary" onclick="saveCourseSettings()">
+                                            <i class="fas fa-save"></i> 保存设置
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 互动评估 -->
+                <div class="content-tab" id="evaluation-tab">
+                    <div class="page-header">
+                        <h2 class="page-title">互动效果评估</h2>
+                        <p class="page-subtitle">基于课堂数据生成教学效果评估报告</p>
+                    </div>
+                    
+                    <!-- 筛选区域 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fas fa-filter"></i> 筛选条件</div>
+                        </div>
+                        <div class="panel-body">
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                                    <label class="form-label">评估范围</label>
+                                    <select class="form-control" id="evaluationScope" onchange="onEvaluationScopeChange()">
+                                        <option value="all">全部数据</option>
+                                        <option value="course">按课程</option>
+                                        <option value="class">按班级</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0; display: none;" id="courseFilterGroup">
+                                    <label class="form-label">选择课程</label>
+                                    <select class="form-control" id="evaluationCourseFilter">
+                                        <option value="">请选择课程</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0; display: none;" id="classFilterGroup">
+                                    <label class="form-label">选择班级</label>
+                                    <select class="form-control" id="evaluationClassFilter">
+                                        <option value="">请选择班级</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary" onclick="generateEvaluationReport()">
+                                    <i class="fas fa-sync-alt"></i> 生成报告
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 报告内容区域 -->
+                    <div id="evaluationReportContainer" style="display: none;">
+                        <!-- 核心指标概览 -->
+                        <div class="panel" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 20px;">
+                            <div class="panel-body">
+                                <h3 style="margin: 0 0 20px 0; font-size: 20px;"><i class="fas fa-clipboard-check"></i> 教学效果评估概览</h3>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; text-align: center;">
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="evalTotalSessions">0</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">开展课堂次数</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="evalTotalCourses">0</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">涉及课程数</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="evalTotalStudents">0</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">覆盖学生数</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="evalTotalQuestions">0</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">发布问题数</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="evalAvgHeadUpRate">0%</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">平均抬头率</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="evalAvgCorrectRate">0%</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">平均正确率</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 图表1：抬头率趋势 + 评估建议 -->
+                        <div class="panel" style="margin-bottom: 20px;">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-chart-line text-primary"></i> 抬头率趋势分析</div>
+                            </div>
+                            <div class="panel-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                                    <div style="min-height: 300px;">
+                                        <canvas id="evalHeadUpTrendChart"></canvas>
+                                    </div>
+                                    <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                                        <h5 style="margin: 0 0 15px 0; color: var(--dark-color);"><i class="fas fa-comment-dots text-primary"></i> 趋势评估</h5>
+                                        <div id="headUpTrendSuggestion" style="line-height: 1.8; color: #495057;">
+                                            <p>正在分析抬头率趋势数据...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 图表2：各课程正确率 + 评估建议 -->
+                        <div class="panel" style="margin-bottom: 20px;">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-chart-bar text-primary"></i> 各课程正确率分析</div>
+                            </div>
+                            <div class="panel-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                                    <div style="min-height: 300px;">
+                                        <canvas id="evalCorrectRateChart"></canvas>
+                                    </div>
+                                    <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                                        <h5 style="margin: 0 0 15px 0; color: var(--dark-color);"><i class="fas fa-comment-dots text-primary"></i> 课程评估</h5>
+                                        <div id="correctRateSuggestion" style="line-height: 1.8; color: #495057;">
+                                            <p>正在分析课程正确率数据...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 图表3：学生参与度 + 评估建议 -->
+                        <div class="panel" style="margin-bottom: 20px;">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-users text-primary"></i> 学生参与度分析</div>
+                            </div>
+                            <div class="panel-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                                    <div style="min-height: 300px;">
+                                        <canvas id="evalParticipationChart"></canvas>
+                                    </div>
+                                    <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                                        <h5 style="margin: 0 0 15px 0; color: var(--dark-color);"><i class="fas fa-comment-dots text-primary"></i> 参与度评估</h5>
+                                        <div id="participationSuggestion" style="line-height: 1.8; color: #495057;">
+                                            <p>正在分析学生参与度数据...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 图表4：题目错误率 + 评估建议 -->
+                        <div class="panel" style="margin-bottom: 20px;">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-exclamation-triangle text-primary"></i> 易错题目分析</div>
+                            </div>
+                            <div class="panel-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                                    <div style="min-height: 300px;">
+                                        <canvas id="evalErrorRateChart"></canvas>
+                                    </div>
+                                    <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;">
+                                        <h5 style="margin: 0 0 15px 0; color: var(--dark-color);"><i class="fas fa-comment-dots text-primary"></i> 错题评估</h5>
+                                        <div id="errorRateSuggestion" style="line-height: 1.8; color: #495057;">
+                                            <p>正在分析易错题目数据...</p>
+                                        </div>
+                                        <!-- 易错题目列表 -->
+                                        <div id="errorRateQuestions" style="margin-top: 15px; max-height: 200px; overflow-y: auto;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 学生表现分析 -->
+                        <div class="panel" style="margin-bottom: 20px;">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-user-friends text-primary"></i> 学生表现分析</div>
+                            </div>
+                            <div class="panel-body">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                                    <!-- 需关注学生 -->
+                                    <div style="background: #fff3cd; border-radius: 8px; padding: 20px; border-left: 4px solid #ffc107;">
+                                        <h5 style="margin: 0 0 15px 0; color: #856404;"><i class="fas fa-user-times"></i> 需关注学生（抬头率低于60%）</h5>
+                                        <div id="abnormalStudentsSuggestion" style="line-height: 1.8; color: #856404; margin-bottom: 15px;">
+                                            <p>正在分析学生数据...</p>
+                                        </div>
+                                        <div class="table-container" style="max-height: 200px; overflow-y: auto;">
+                                            <table class="table table-sm" id="abnormalStudentsTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th>学号</th>
+                                                        <th>姓名</th>
+                                                        <th>班级</th>
+                                                        <th>抬头率</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="abnormalStudentsTableBody"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <!-- 优秀学生 -->
+                                    <div style="background: #d4edda; border-radius: 8px; padding: 20px; border-left: 4px solid #28a745;">
+                                        <h5 style="margin: 0 0 15px 0; color: #155724;"><i class="fas fa-user-check"></i> 表现优秀学生（抬头率高于90%）</h5>
+                                        <div id="excellentStudentsSuggestion" style="line-height: 1.8; color: #155724; margin-bottom: 15px;">
+                                            <p>正在分析学生数据...</p>
+                                        </div>
+                                        <div class="table-container" style="max-height: 200px; overflow-y: auto;">
+                                            <table class="table table-sm" id="excellentStudentsTable">
+                                                <thead>
+                                                    <tr>
+                                                        <th>学号</th>
+                                                        <th>姓名</th>
+                                                        <th>班级</th>
+                                                        <th>抬头率</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="excellentStudentsTableBody"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 综合教学建议 -->
+                        <div class="panel" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                            <div class="panel-body">
+                                <h4 style="margin: 0 0 15px 0;"><i class="fas fa-lightbulb"></i> 综合教学建议</h4>
+                                <div id="teachingSuggestions" style="line-height: 1.8;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 空状态 -->
+                    <div id="evaluationEmptyState" class="empty-state">
+                        <i class="fas fa-chart-bar" style="font-size: 64px; color: #dee2e6;"></i>
+                        <p style="margin-top: 16px; color: #6c757d;">请选择筛选条件并点击"生成报告"查看互动效果评估</p>
+                    </div>
+                </div>
+
+                <!-- 记录查询 -->
+                <div class="content-tab" id="records-tab">
+                    <div class="page-header">
+                        <h2 class="page-title">学生课程记录查询</h2>
+                        <p class="page-subtitle">查询指定学生的课堂表现和学习数据</p>
+                    </div>
+                    
+                    <!-- 搜索区域 -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><i class="fas fa-search"></i> 查询条件</div>
+                        </div>
+                        <div class="panel-body">
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                                    <label class="form-label">学生学号 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="studentRecordSearchId" placeholder="请输入学生学号">
+                                </div>
+                                <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                                    <label class="form-label">课程筛选</label>
+                                    <select class="form-control" id="studentRecordCourseFilter">
+                                        <option value="">全部课程</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary" onclick="searchStudentRecords()">
+                                    <i class="fas fa-search"></i> 查询
+                                </button>
+                                <button class="btn btn-secondary" onclick="resetStudentRecordSearch()">
+                                    <i class="fas fa-redo"></i> 重置
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 学生总览统计 -->
+                    <div id="studentRecordOverview" style="display: none;">
+                        <div class="panel" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                            <div class="panel-body">
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; text-align: center;">
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="overviewStudentName">-</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">学生姓名</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="overviewCourseCount">0</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">参与课程数</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="overviewAvgHeadUpRate">0%</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">平均抬头率</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="overviewAvgCorrectRate">0%</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">平均正确率</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="overviewTotalQuestions">0</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">累计识别提问数</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 32px; font-weight: bold;" id="overviewAbnormalCount">0</div>
+                                        <div style="font-size: 14px; opacity: 0.9;">异常记录数</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 各课程详细记录 -->
+                        <div class="panel" style="margin-top: 20px;">
+                            <div class="panel-header">
+                                <div class="panel-title"><i class="fas fa-list"></i> 课程详细记录</div>
+                            </div>
+                            <div class="panel-body" style="padding: 0;">
+                                <div class="table-container">
+                                    <table class="table" id="studentCourseRecordTable">
+                                        <thead>
+                                            <tr>
+                                                <th>课程名称</th>
+                                                <th>课堂时间</th>
+                                                <th>抬头率</th>
+                                                <th>答题情况</th>
+                                                <th>正确率</th>
+                                                <th>识别提问数</th>
+                                                <th>状态</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="studentCourseRecordTableBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 空状态提示 -->
+                    <div id="studentRecordEmpty" class="empty-state" style="display: block;">
+                        <i class="fas fa-user-graduate" style="font-size: 64px; color: #dee2e6;"></i>
+                        <p style="margin-top: 16px; color: #6c757d;">请输入学生学号查询课程记录</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 课程详情面板 -->
+    <div id="courseDetailPanel" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;">
+        <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 70%; background: var(--white); overflow-y: auto;">
+            <div style="padding: 20px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center;">
+                <h3 id="courseDetailTitle" style="font-size: 20px; font-weight: 600;">课程详情</h3>
+                <button class="btn btn-secondary btn-sm" onclick="hideCourseDetail()">
+                    <i class="fas fa-times"></i> 关闭
+                </button>
+            </div>
+            <div style="padding: 20px;">
+                <div class="tab-nav" id="courseTabNav">
+                    <button class="tab-btn active" onclick="switchCourseTab('questions', event)">
+                        <i class="fas fa-question-circle"></i> 问题管理
+                    </button>
+                    <button class="tab-btn" onclick="switchCourseTab('records', event)">
+                        <i class="fas fa-history"></i> 课程记录
+                    </button>
+                    <button class="tab-btn" onclick="switchCourseTab('statistics', event)">
+                        <i class="fas fa-chart-bar"></i> 答题统计
+                    </button>
+                </div>
+                <div id="courseQuestionsTab" class="course-tab-content active"></div>
+                <div id="courseRecordsTab" class="course-tab-content">
+                    <div id="courseRecordsContainer"></div>
+                </div>
+                <div id="courseStatisticsTab" class="course-tab-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                fetch('/teacher/logout', { method: 'POST', credentials: 'include' })
+                    .then(() => { window.location.href = '/teacher/login'; })
+                    .catch(() => { window.location.href = '/teacher/login'; });
+            }
+        }
+    </script>
+
+    <!-- 编辑学生模态框 -->
+    <div id="editStudentModal" class="student-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+        <div class="student-modal-content" style="background: white; border-radius: 8px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 600;">编辑学生信息</h3>
+                <button onclick="closeEditStudentModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <input type="hidden" id="editStudentId">
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">学号</label>
+                    <input type="text" class="form-control" id="editStudentIdDisplay" disabled style="background: #f8f9fa;">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">姓名 <span style="color: red;">*</span></label>
+                    <input type="text" class="form-control" id="editStudentName" placeholder="请输入姓名">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">年级</label>
+                    <input type="text" class="form-control" id="editStudentGrade" placeholder="请输入年级">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">专业</label>
+                    <input type="text" class="form-control" id="editStudentMajor" placeholder="请输入专业">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">班级</label>
+                    <input type="text" class="form-control" id="editStudentClass" placeholder="请输入班级">
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeEditStudentModal()">取消</button>
+                <button class="btn btn-primary" onclick="updateStudent()">保存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加学生模态框 -->
+    <div id="addStudentModal" class="student-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+        <div class="student-modal-content" style="background: white; border-radius: 8px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 600;">添加学生</h3>
+                <button onclick="closeAddStudentModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">学号 <span style="color: red;">*</span></label>
+                    <input type="text" class="form-control" id="addStudentIdInput" placeholder="请输入学号">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">姓名 <span style="color: red;">*</span></label>
+                    <input type="text" class="form-control" id="addStudentNameInput" placeholder="请输入姓名">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">年级</label>
+                    <input type="text" class="form-control" id="addStudentGradeInput" placeholder="请输入年级">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">专业</label>
+                    <input type="text" class="form-control" id="addStudentMajorInput" placeholder="请输入专业">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label class="form-label">班级</label>
+                    <input type="text" class="form-control" id="addStudentClassInput" placeholder="请输入班级">
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeAddStudentModal()">取消</button>
+                <button class="btn btn-primary" onclick="submitAddStudent()">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 课堂详情弹窗 -->
+    <div id="sessionDetailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 95%; max-width: 1200px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-info-circle"></i> <span id="sessionDetailTitle">课堂详情</span></h4>
+                <button onclick="closeSessionDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div><strong>开始时间：</strong><span id="sessionDetailStartTime">-</span></div>
+                        <div><strong>结束时间：</strong><span id="sessionDetailEndTime">-</span></div>
+                        <div><strong>学生数：</strong><span id="sessionDetailStudentCount">0</span></div>
+                        <div><strong>问题数：</strong><span id="sessionDetailQuestionCount">0</span></div>
+                        <div><strong>异常学生数：</strong><span id="sessionDetailWarningCount" style="color: #dc3545; font-weight: bold;">0</span></div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button class="btn btn-sm" id="filterAllBtn" onclick="filterSessionStudents('all')" style="background: #007bff; color: white;">全部</button>
+                    <button class="btn btn-sm" id="filterWarningBtn" onclick="filterSessionStudents('warning')" style="background: #f8f9fa; color: #333;">仅显示异常</button>
+                    <button class="btn btn-sm" id="filterNormalBtn" onclick="filterSessionStudents('normal')" style="background: #f8f9fa; color: #333;">仅显示正常</button>
+                </div>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>学号</th>
+                                <th>姓名</th>
+                                <th>抬头率</th>
+                                <th>识别提问数</th>
+                                <th>答题数/总题数</th>
+                                <th>正确数</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessionStudentsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeSessionDetailModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 班级学生分布弹窗 -->
+    <div id="classDistributionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-users"></i> 班级学生分布</h4>
+                <button onclick="closeClassDistributionModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="max-height: 500px;">
+                    <canvas id="classDistributionChartModal"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeClassDistributionModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 班级抬头率弹窗 -->
+    <div id="headUpRateModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-chart-line"></i> 各班级平均抬头率</h4>
+                <button onclick="closeHeadUpRateModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="max-height: 500px;">
+                    <canvas id="headUpRateChartModal"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeHeadUpRateModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 班级正确率弹窗 -->
+    <div id="correctRateModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-check-circle"></i> 各班级平均正确率</h4>
+                <button onclick="closeCorrectRateModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="max-height: 500px;">
+                    <canvas id="correctRateChartModal"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeCorrectRateModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 专业学生分布弹窗 -->
+    <div id="majorDistributionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-graduation-cap"></i> 专业学生分布</h4>
+                <button onclick="closeMajorDistributionModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="max-height: 500px;">
+                    <canvas id="majorDistributionChartModal"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeMajorDistributionModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 问题类型分布弹窗 -->
+    <div id="questionTypeModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-chart-pie"></i> 问题类型分布</h4>
+                <button onclick="closeQuestionTypeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="max-height: 500px;">
+                    <canvas id="questionTypeChartModal"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeQuestionTypeModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 各课程提问统计弹窗 -->
+    <div id="courseQuestionModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 90%; max-width: 800px; max-height: 80vh; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-microphone"></i> 各课程提问统计</h4>
+                <button onclick="closeCourseQuestionModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="max-height: 500px;">
+                    <canvas id="courseQuestionChartModal"></canvas>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeCourseQuestionModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 学生课堂详情弹窗 -->
+    <div id="studentSessionDetailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 95%; max-width: 900px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-user"></i> <span id="studentSessionDetailTitle">学生详情</span></h4>
+                <button onclick="closeStudentSessionDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div id="studentSessionWarningBox" style="display: none; margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+                    <h5 style="margin: 0 0 10px 0; color: #856404;"><i class="fas fa-exclamation-triangle"></i> 异常提醒</h5>
+                    <div id="studentSessionWarningContent"></div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h5 style="margin: 0 0 10px 0; color: var(--dark-color);"><i class="fas fa-video"></i> 抬头记录</h5>
+                    <div id="studentVideoRecordsContent" style="max-height: 200px; overflow-y: auto;"></div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h5 style="margin: 0 0 10px 0; color: var(--dark-color);"><i class="fas fa-microphone"></i> 音频记录</h5>
+                    <div id="studentAudioRecordsContent" style="max-height: 200px; overflow-y: auto;"></div>
+                </div>
+                
+                <div>
+                    <h5 style="margin: 0 0 10px 0; color: var(--dark-color);"><i class="fas fa-edit"></i> 答题记录</h5>
+                    <div id="studentAnswerRecordsContent" style="max-height: 300px; overflow-y: auto;"></div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeStudentSessionDetailModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 学生课程记录详情弹窗 -->
+    <div id="studentCourseRecordDetailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2002; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 8px; width: 95%; max-width: 1000px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; color: var(--dark-color);"><i class="fas fa-clipboard-list"></i> <span id="studentCourseRecordDetailTitle">课程记录详情</span></h4>
+                <button onclick="closeStudentCourseRecordDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <!-- 课堂概览 -->
+                <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                        <div><strong>课程：</strong><span id="detailCourseName">-</span></div>
+                        <div><strong>时间：</strong><span id="detailSessionTime">-</span></div>
+                        <div><strong>抬头率：</strong><span id="detailHeadUpRate">-</span></div>
+                        <div><strong>答题：</strong><span id="detailAnswerStats">-</span></div>
+                        <div><strong>正确率：</strong><span id="detailCorrectRate">-</span></div>
+                        <div><strong>识别提问数：</strong><span id="detailQuestionCount">-</span></div>
+                    </div>
+                </div>
+                
+                <!-- 视频抬头记录 -->
+                <div style="margin-bottom: 20px;">
+                    <h5 style="margin: 0 0 10px 0; color: var(--dark-color); border-left: 4px solid #007bff; padding-left: 10px;">
+                        <i class="fas fa-video"></i> 视频抬头记录
+                    </h5>
+                    <div id="detailVideoRecords" style="max-height: 200px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 4px; padding: 10px;">
+                        <p style="color: #6c757d; text-align: center; margin: 0;">暂无记录</p>
+                    </div>
+                </div>
+                
+                <!-- 语音提问记录 -->
+                <div style="margin-bottom: 20px;">
+                    <h5 style="margin: 0 0 10px 0; color: var(--dark-color); border-left: 4px solid #28a745; padding-left: 10px;">
+                        <i class="fas fa-microphone"></i> 语音提问记录
+                    </h5>
+                    <div id="detailAudioRecords" style="max-height: 200px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 4px; padding: 10px;">
+                        <p style="color: #6c757d; text-align: center; margin: 0;">暂无记录</p>
+                    </div>
+                </div>
+                
+                <!-- 答题记录 -->
+                <div>
+                    <h5 style="margin: 0 0 10px 0; color: var(--dark-color); border-left: 4px solid #ffc107; padding-left: 10px;">
+                        <i class="fas fa-edit"></i> 答题记录
+                    </h5>
+                    <div id="detailAnswerRecords" style="max-height: 250px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 4px; padding: 10px;">
+                        <p style="color: #6c757d; text-align: center; margin: 0;">暂无记录</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 20px; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeStudentCourseRecordDetailModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 弹窗图表实例
+        let classDistributionChartModalInstance = null;
+        let headUpRateChartModalInstance = null;
+        let correctRateChartModalInstance = null;
+        let majorDistributionChartModalInstance = null;
+        let questionTypeChartModalInstance = null;
+        let courseQuestionChartModalInstance = null;
+
+        // 显示班级分布弹窗
+        function showClassDistributionModal() {
+            const modal = document.getElementById('classDistributionModal');
+            modal.style.display = 'flex';
+            
+            // 渲染弹窗中的图表
+            renderClassDistributionChartModal();
+        }
+
+        // 关闭班级分布弹窗
+        function closeClassDistributionModal() {
+            const modal = document.getElementById('classDistributionModal');
+            modal.style.display = 'none';
+        }
+
+        // 渲染弹窗中的班级分布图表
+        function renderClassDistributionChartModal() {
+            const ctx = document.getElementById('classDistributionChartModal');
+            if (!ctx) return;
+            
+            const context = ctx.getContext('2d');
+            
+            // 销毁旧图表
+            if (classDistributionChartModalInstance && typeof classDistributionChartModalInstance.destroy === 'function') {
+                classDistributionChartModalInstance.destroy();
+            }
+            
+            let classLabels = ['暂无数据'];
+            let classData = [0];
+            
+            // 使用全局变量中的数据
+            const data = window.classDistributionData;
+            if (data && data.length > 0) {
+                classLabels = data.map(item => item.class_name);
+                classData = data.map(item => item.student_count);
+            }
+            
+            classDistributionChartModalInstance = new Chart(context, {
+                type: 'bar',
+                data: {
+                    labels: classLabels,
+                    datasets: [{
+                        label: '学生人数',
+                        data: classData,
+                        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: '学生人数' },
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {
+                                    return Number.isInteger(value) ? value : '';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 显示抬头率弹窗
+        function showHeadUpRateModal() {
+            const modal = document.getElementById('headUpRateModal');
+            modal.style.display = 'flex';
+            
+            // 渲染弹窗中的图表
+            renderHeadUpRateChartModal();
+        }
+
+        // 关闭抬头率弹窗
+        function closeHeadUpRateModal() {
+            const modal = document.getElementById('headUpRateModal');
+            modal.style.display = 'none';
+        }
+
+        // 渲染弹窗中的抬头率图表
+        function renderHeadUpRateChartModal() {
+            const ctx = document.getElementById('headUpRateChartModal');
+            if (!ctx) return;
+            
+            const context = ctx.getContext('2d');
+            
+            // 销毁旧图表
+            if (headUpRateChartModalInstance && typeof headUpRateChartModalInstance.destroy === 'function') {
+                headUpRateChartModalInstance.destroy();
+            }
+            
+            let classLabels = ['暂无数据'];
+            let headUpRates = [0];
+            
+            // 使用全局变量中的数据
+            const data = window.classHeadUpRates;
+            if (data && data.length > 0) {
+                classLabels = data.map(item => item.class_name);
+                headUpRates = data.map(item => item.avg_head_up_rate);
+            }
+            
+            headUpRateChartModalInstance = new Chart(context, {
+                type: 'bar',
+                data: {
+                    labels: classLabels,
+                    datasets: [{
+                        label: '平均抬头率(%)',
+                        data: headUpRates,
+                        backgroundColor: 'rgba(23, 162, 184, 0.8)',
+                        borderColor: 'rgba(23, 162, 184, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: { display: true, text: '抬头率(%)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 显示正确率弹窗
+        function showCorrectRateModal() {
+            const modal = document.getElementById('correctRateModal');
+            modal.style.display = 'flex';
+            
+            // 渲染弹窗中的图表
+            renderCorrectRateChartModal();
+        }
+
+        // 关闭正确率弹窗
+        function closeCorrectRateModal() {
+            const modal = document.getElementById('correctRateModal');
+            modal.style.display = 'none';
+        }
+
+        // 渲染弹窗中的正确率图表
+        function renderCorrectRateChartModal() {
+            const ctx = document.getElementById('correctRateChartModal');
+            if (!ctx) return;
+            
+            const context = ctx.getContext('2d');
+            
+            // 销毁旧图表
+            if (correctRateChartModalInstance && typeof correctRateChartModalInstance.destroy === 'function') {
+                correctRateChartModalInstance.destroy();
+            }
+            
+            let classLabels = ['暂无数据'];
+            let correctRates = [0];
+            
+            // 使用全局变量中的数据
+            const data = window.classCorrectRates;
+            if (data && data.length > 0) {
+                classLabels = data.map(item => item.class_name);
+                correctRates = data.map(item => item.avg_correct_rate);
+            }
+            
+            correctRateChartModalInstance = new Chart(context, {
+                type: 'bar',
+                data: {
+                    labels: classLabels,
+                    datasets: [{
+                        label: '平均正确率(%)',
+                        data: correctRates,
+                        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: { display: true, text: '正确率(%)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 显示专业分布弹窗
+        function showMajorDistributionModal() {
+            const modal = document.getElementById('majorDistributionModal');
+            modal.style.display = 'flex';
+            
+            // 渲染弹窗中的图表
+            renderMajorDistributionChartModal();
+        }
+
+        // 关闭专业分布弹窗
+        function closeMajorDistributionModal() {
+            const modal = document.getElementById('majorDistributionModal');
+            modal.style.display = 'none';
+        }
+
+        // 渲染弹窗中的专业分布图表
+        function renderMajorDistributionChartModal() {
+            const ctx = document.getElementById('majorDistributionChartModal');
+            if (!ctx) return;
+            
+            const context = ctx.getContext('2d');
+            
+            // 销毁旧图表
+            if (majorDistributionChartModalInstance && typeof majorDistributionChartModalInstance.destroy === 'function') {
+                majorDistributionChartModalInstance.destroy();
+            }
+            
+            let majorLabels = ['暂无数据'];
+            let majorData = [0];
+            
+            // 使用全局变量中的数据
+            const data = window.majorDistributionData;
+            if (data && data.length > 0) {
+                majorLabels = data.map(item => item.major_name);
+                majorData = data.map(item => item.student_count);
+            }
+            
+            majorDistributionChartModalInstance = new Chart(context, {
+                type: 'doughnut',
+                data: {
+                    labels: majorLabels,
+                    datasets: [{
+                        data: majorData,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)',
+                            'rgba(255, 159, 64, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // 显示问题类型分布弹窗
+        function showQuestionTypeModal() {
+            const modal = document.getElementById('questionTypeModal');
+            modal.style.display = 'flex';
+            
+            // 渲染弹窗中的图表
+            renderQuestionTypeChartModal();
+        }
+
+        // 关闭问题类型分布弹窗
+        function closeQuestionTypeModal() {
+            const modal = document.getElementById('questionTypeModal');
+            modal.style.display = 'none';
+        }
+
+        // 渲染弹窗中的问题类型分布图表
+        function renderQuestionTypeChartModal() {
+            const ctx = document.getElementById('questionTypeChartModal');
+            if (!ctx) return;
+
+            const context = ctx.getContext('2d');
+
+            // 销毁旧图表
+            if (questionTypeChartModalInstance && typeof questionTypeChartModalInstance.destroy === 'function') {
+                questionTypeChartModalInstance.destroy();
+            }
+
+            const typeMap = {
+                'single_choice': '单选题',
+                'multiple_choice': '多选题',
+                'judgment': '判断题',
+                'subjective': '主观题'
+            };
+
+            let typeLabels = ['暂无数据'];
+            let typeData = [0];
+
+            // 使用全局变量中的数据
+            const data = window.questionTypeStats;
+            if (data && data.length > 0) {
+                typeLabels = data.map(item => typeMap[item.type] || item.type);
+                typeData = data.map(item => item.count);
+            }
+
+            questionTypeChartModalInstance = new Chart(context, {
+                type: 'pie',
+                data: {
+                    labels: typeLabels,
+                    datasets: [{
+                        data: typeData,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+        }
+
+        // 显示课程提问统计弹窗
+        function showCourseQuestionModal() {
+            const modal = document.getElementById('courseQuestionModal');
+            modal.style.display = 'flex';
+
+            // 渲染弹窗中的图表
+            renderCourseQuestionChartModal();
+        }
+
+        // 关闭课程提问统计弹窗
+        function closeCourseQuestionModal() {
+            const modal = document.getElementById('courseQuestionModal');
+            modal.style.display = 'none';
+        }
+
+        // 渲染弹窗中的课程提问统计图表
+        function renderCourseQuestionChartModal() {
+            const ctx = document.getElementById('courseQuestionChartModal');
+            if (!ctx) return;
+
+            const context = ctx.getContext('2d');
+
+            // 销毁旧图表
+            if (courseQuestionChartModalInstance && typeof courseQuestionChartModalInstance.destroy === 'function') {
+                courseQuestionChartModalInstance.destroy();
+            }
+
+            let courseLabels = ['暂无数据'];
+            let questionCounts = [0];
+
+            // 使用全局变量中的数据
+            const data = window.courseQuestionStats;
+            if (data && data.length > 0) {
+                courseLabels = data.map(item => item.course_name);
+                questionCounts = data.map(item => item.question_count);
+            }
+
+            courseQuestionChartModalInstance = new Chart(context, {
+                type: 'bar',
+                data: {
+                    labels: courseLabels,
+                    datasets: [{
+                        label: '识别提问数量',
+                        data: questionCounts,
+                        backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: '识别提问数量' },
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {
+                                    return Number.isInteger(value) ? value : '';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 页面加载完成后自动加载仪表盘数据
+        document.addEventListener('DOMContentLoaded', function() {
+            // 如果当前在仪表盘页面，加载数据
+            if (document.getElementById('dashboard-tab') && document.getElementById('dashboard-tab').classList.contains('active')) {
+                if (typeof loadDashboardData === 'function') {
+                    loadDashboardData();
+                }
+            }
+        });
+
+        // 页面标题映射
+        const pageTitles = {
+            'dashboard': '数据仪表盘',
+            'students': '学生管理',
+            'classroom': '课堂管理',
+            'evaluation': '互动效果评估',
+            'records': '学生课程记录查询'
+        };
+
+        // 切换标签页时加载对应数据
+        function switchTab(tabName) {
+            // 隐藏所有标签页
+            document.querySelectorAll('.content-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // 显示目标标签页
+            const targetTab = document.getElementById(tabName + '-tab');
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
+
+            // 更新导航栏激活状态
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.nav-item').classList.add('active');
+
+            // 更新页面标题
+            const headerTitle = document.querySelector('.header-title');
+            if (headerTitle && pageTitles[tabName]) {
+                headerTitle.textContent = pageTitles[tabName];
+            }
+
+            // 根据标签页加载对应数据
+            if (tabName === 'dashboard' && typeof loadDashboardData === 'function') {
+                loadDashboardData();
+            } else if (tabName === 'students' && typeof loadStudents === 'function') {
+                loadStudents();
+            } else if (tabName === 'classroom' && typeof loadClassrooms === 'function') {
+                loadClassrooms();
+            } else if (tabName === 'records' && typeof loadRecords === 'function') {
+                loadRecords();
+            }
+        }
+    </script>
+</body>
+</html>
